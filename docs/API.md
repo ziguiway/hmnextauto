@@ -21,6 +21,7 @@
 - [文件操作](#文件操作)
 - [性能监控](#性能监控)
 - [后台性能监控](#后台性能监控)
+- [通知栏操作](#通知栏操作)
 - [HDC 命令](#hdc-命令)
 
 ---
@@ -872,6 +873,59 @@ print(f"内存平均: {summary['metrics']['memory_pss']['avg']} KB")
 - `memory_native`: Native heap KB (int)
 - `memory_ark`: Ark TS heap KB (int)
 - `hitches`: 帧卡顿统计 `{"over_16ms": n, "over_33ms": n, "over_66ms": n}`
+
+---
+
+## 通知栏操作
+
+| API | 说明 |
+|-----|------|
+| `notification.open()` | 打开通知栏 |
+| `notification.close()` | 关闭通知栏 |
+| `notification.toggle()` | 切换通知栏状态 |
+| `notification.open_quick_settings()` | 打开快捷设置面板 |
+| `notification.get_notifications()` | 获取通知列表 |
+| `notification.click_notification(index/text)` | 点击通知 |
+| `notification.clear_all_notifications()` | 清除所有通知 |
+| `notification.click_quick_setting(name)` | 点击快捷设置项 |
+| `notification.set_brightness(level)` | 设置屏幕亮度 |
+
+### 示例代码
+
+```python
+# 打开/关闭通知栏
+d.notification.open()
+d.notification.close()
+
+# 切换通知栏状态
+d.notification.toggle()
+
+# 使用上下文管理器（自动关闭）
+with d.notification:
+    # 获取通知列表
+    notifications = d.notification.get_notifications()
+    print(f"通知数量: {len(notifications)}")
+    
+    # 点击通知（按索引）
+    d.notification.click_notification(index=0)
+    
+    # 点击通知（按文本）
+    d.notification.click_notification(text="微信")
+
+# 打开快捷设置面板
+d.notification.open_quick_settings()
+
+# 点击快捷设置项
+d.notification.click_quick_setting("WiFi")
+d.notification.click_quick_setting("蓝牙")
+d.notification.click_quick_setting("飞行模式")
+
+# 设置屏幕亮度 (0-100)
+d.notification.set_brightness(50)
+
+# 清除所有通知
+d.notification.clear_all_notifications()
+```
 
 ---
 

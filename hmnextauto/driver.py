@@ -507,6 +507,31 @@ class Driver:
         from ._performance_watcher import PerformanceWatcher
         return PerformanceWatcher(self)
 
+    @cached_property
+    def notification(self):
+        """
+        Notification panel operations.
+
+        Usage::
+
+            # Open/close notification panel
+            d.notification.open()
+            d.notification.close()
+
+            # Click notification by text
+            d.notification.click_notification(text="微信")
+
+            # Open quick settings and click
+            d.notification.click_quick_setting("WiFi")
+
+            # Context manager
+            with d.notification:
+                d.notification.click_notification(index=0)
+                # ... auto close
+        """
+        from ._notification import NotificationPanel
+        return NotificationPanel(self)
+
     @delay
     def go_back(self):
         self.hdc.send_key(KeyCode.BACK)
