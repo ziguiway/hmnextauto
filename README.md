@@ -1,4 +1,4 @@
-# HMNextAuto
+# HMNextAuto 鸿蒙自动化框架
 
 [![PyPI version](https://img.shields.io/pypi/v/hmnextauto.svg)](https://pypi.python.org/pypi/hmnextauto)
 [![Python](https://img.shields.io/pypi/pyversions/hmnextauto.svg)](https://pypi.org/project/hmnextauto)
