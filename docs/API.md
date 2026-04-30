@@ -492,6 +492,10 @@ lst.scroll.toEnd()
 | `.exists()` | 是否存在 | `bool` |
 | `.wait(timeout)` | 等待出现 | `bool` |
 | `.wait_gone(timeout)` | 等待消失 | `bool` |
+| `.wait_enabled(timeout)` | 等待可用 | `bool` |
+| `.wait_clickable(timeout)` | 等待可点击 | `bool` |
+| `.wait_until(condition)` | 等待条件满足 | `bool` |
+| `.wait_until_not(condition)` | 等待条件不满足 | `bool` |
 | `.click()` | 点击 | - |
 | `.click_if_exists()` | 存在才点击 | - |
 | `.double_click()` | 双击 | - |
@@ -499,6 +503,10 @@ lst.scroll.toEnd()
 | `.input_text(text)` | 输入文本 | - |
 | `.info` | 控件属性 | `dict` |
 | `.text` | 文本内容 | `str` |
+| `.count` | 匹配数量 | `int` |
+| `.all()` | 所有匹配元素 | `List[_XMLElement]` |
+| `.first()` | 第一个匹配 | `_XMLElement` |
+| `.last()` | 最后一个匹配 | `_XMLElement` |
 
 ### 示例代码
 
@@ -514,6 +522,13 @@ if d.xpath('//Text[@text="加载完成"]').wait(timeout=10):
 if d.xpath('//ProgressBar').wait_gone(timeout=5):
     print("加载完成")
 
+# 等待可用/可点击
+d.xpath('//Button').wait_enabled(timeout=5)
+d.xpath('//Button').wait_clickable(timeout=5)
+
+# 自定义条件等待
+d.xpath('//Text[@id="status"]').wait_until(lambda e: e.get("text") == "完成")
+
 # 存在才点击
 d.xpath('//*[@text="跳过"]').click_if_exists()
 
@@ -523,6 +538,20 @@ d.xpath('//TextField').input_text("hello")
 # 获取控件信息
 info = d.xpath('//*[@text="确定"]').info
 text = d.xpath('//*[@text="确定"]').text
+
+# 获取匹配数量
+count = d.xpath('//*[@clickable="true"]').count
+print(f"找到 {count} 个可点击元素")
+
+# 获取所有匹配元素
+elements = d.xpath('//*[@clickable="true"]').all()
+for el in elements:
+    print(f"元素位置: {el.bounds}")
+    el.click_if_exists()
+
+# 获取第一个/最后一个匹配
+first_el = d.xpath('//*[@clickable="true"]').first()
+last_el = d.xpath('//*[@clickable="true"]').last()
 ```
 
 ---

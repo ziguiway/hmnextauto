@@ -26,24 +26,31 @@ class _XPath:
         return _XPath._resolve(self._d, xpath)
 
     @staticmethod
-    def _resolve(d: Driver, xpath: str) -> "_XMLElement":
-        """Evaluate *xpath* against the current view hierarchy; returns a bound _XMLElement."""
+    def _resolve_all(d: Driver, xpath: str) -> list:
+        """Evaluate *xpath* and return all matching elements as a list of _XMLElement."""
         hierarchy: Dict = d.dump_hierarchy()
         if not hierarchy:
-            raise RuntimeError("hierarchy is empty")
+            return []
 
         xml = _XPath._json2xml(hierarchy)
         result = xml.xpath(xpath)
 
-        if len(result) > 0:
-            node = result[0]
-            raw_bounds: str = node.attrib.get("bounds")  # [832,1282][1125,1412]
+        elements = []
+        for node in result:
+            raw_bounds: str = node.attrib.get("bounds")
             bounds: Bounds = parse_bounds(raw_bounds)
-            logger.debug(f"{xpath} Bounds: {bounds}")
             _xe = _XMLElement(bounds, d, xpath)
             setattr(_xe, "attrib_info", node.attrib)
-            return _xe
+            elements.append(_xe)
 
+        return elements
+
+    @staticmethod
+    def _resolve(d: Driver, xpath: str) -> "_XMLElement":
+        """Evaluate *xpath* against the current view hierarchy; returns a bound _XMLElement."""
+        elements = _XPath._resolve_all(d, xpath)
+        if elements:
+            return elements[0]
         return _XMLElement(None, d, xpath)
 
     @staticmethod
@@ -286,12 +293,70 @@ class _XMLElement:
     @delay
     def info(self) -> dict:
         if hasattr(self, 'attrib_info'):
-            return getattr(self, 'attrib_info')
+            # Convert lxml.etree._Attrib to dict for consistent behavior
+            return dict(getattr(self, 'attrib_info'))
         else:
-            logger.warning("the attribute <attrib_info> does not exists！")
+            logger.warning("the attribute <attrib_info> does not exists!")
             return {}
 
     @property
     @delay
     def text(self) -> str:
         return self.info.get("text")
+
+    @property
+    @delay
+    def count(self) -> int:
+        """
+        Return the number of elements matching this xpath.
+
+        Example::
+
+            count = d.xpath('//*[@clickable="true"]').count
+            print(f"Found {count} clickable elements")
+        """
+        elements = _XPath._resolve_all(self._d, self._xpath)
+        return len(elements)
+
+    @delay
+    def all(self) -> list:
+        """
+        Return all matching elements as a list.
+
+        Example::
+
+            elements = d.xpath('//*[@clickable="true"]').all()
+            for el in elements:
+                el.click()
+        """
+        return _XPath._resolve_all(self._d, self._xpath)
+
+    @delay
+    def first(self) -> "_XMLElement":
+        """
+        Return the first matching element.
+
+        Example::
+
+            el = d.xpath('//*[@clickable="true"]').first()
+            el.click()
+        """
+        elements = _XPath._resolve_all(self._d, self._xpath)
+        if elements:
+            return elements[0]
+        return _XMLElement(None, self._d, self._xpath)
+
+    @delay
+    def last(self) -> "_XMLElement":
+        """
+        Return the last matching element.
+
+        Example::
+
+            el = d.xpath('//*[@clickable="true"]').last()
+            el.click()
+        """
+        elements = _XPath._resolve_all(self._d, self._xpath)
+        if elements:
+            return elements[-1]
+        return _XMLElement(None, self._d, self._xpath)
