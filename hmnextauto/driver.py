@@ -477,6 +477,36 @@ class Driver:
         from ._watcher import WatcherManager
         return WatcherManager(self)
 
+    @cached_property
+    def performance_watcher(self):
+        """
+        Performance monitoring watcher for continuous metrics collection.
+
+        Usage::
+
+            # Simple usage
+            pw = d.performance_watcher
+            pw.start(output_file="perf.jsonl", interval=1.0)
+            # ... test execution ...
+            pw.stop()
+
+            # With configuration
+            pw.configure(
+                metrics=["fps", "memory", "cpu"],
+                package="com.example.app",
+                output_file="perf.jsonl"
+            ).start()
+            # ... test execution ...
+            pw.stop()
+
+            # Context manager (recommended)
+            with d.performance_watcher.start("perf.jsonl"):
+                d(text="button").click()
+                # ... auto stop and save
+        """
+        from ._performance_watcher import PerformanceWatcher
+        return PerformanceWatcher(self)
+
     @delay
     def go_back(self):
         self.hdc.send_key(KeyCode.BACK)
