@@ -353,6 +353,11 @@ d.gesture.start(0.5, 0.5).action()  # 等价于 d.click(0.5, 0.5)
 | `exists()` | 是否存在 | `bool` |
 | `wait(timeout)` | 等待出现 | `bool` |
 | `wait_gone(timeout)` | 等待消失 | `bool` |
+| `wait_enabled(timeout)` | 等待可用 | `bool` |
+| `wait_disabled(timeout)` | 等待禁用 | `bool` |
+| `wait_clickable(timeout)` | 等待可点击 | `bool` |
+| `wait_until(condition, timeout)` | 等待自定义条件 | `bool` |
+| `wait_until_not(condition, timeout)` | 等待条件不满足 | `bool` |
 | `find_component()` | 查找控件 | `ComponentData` |
 | `count` | 控件数量 | `int` |
 | `info` | 控件信息 | `ElementInfo` |
@@ -400,6 +405,27 @@ if d(text="加载完成").wait(timeout=10):
 
 if d(type="Dialog").wait_gone(timeout=5):
     print("弹窗已消失")
+
+# 等待可用/禁用
+if d(id="submit_btn").wait_enabled(timeout=5):
+    print("按钮已可用")
+
+if d(id="submit_btn").wait_disabled(timeout=5):
+    print("按钮已禁用")
+
+# 等待可点击
+if d(text="确定").wait_clickable(timeout=5):
+    d(text="确定").click()
+
+# 自定义条件等待
+# 等待文本变为指定内容
+d(id="status").wait_until(lambda e: e.text == "完成", timeout=10)
+
+# 等待元素被选中
+d(id="checkbox").wait_until(lambda e: e.isChecked, timeout=5)
+
+# 等待条件不再满足
+d(id="loading").wait_until_not(lambda e: e.isEnabled, timeout=10)
 
 # 存在才点击（不存在不报错）
 d(text="跳过").click_if_exists()

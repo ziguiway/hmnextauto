@@ -142,6 +142,148 @@ class UiObject:
                 return False
             time.sleep(self._WAIT_POLL_INTERVAL)
 
+    def wait_enabled(self, timeout: Optional[float] = None) -> bool:
+        """
+        等待元素变为可用状态（enabled=True）。
+
+        Args:
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果元素在超时前变为可用，False 否则
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            components = self.__find_components()
+            if components and self._index < len(components):
+                self.__set_component(components[self._index])
+                if self.isEnabled:
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(self._WAIT_POLL_INTERVAL)
+
+    def wait_disabled(self, timeout: Optional[float] = None) -> bool:
+        """
+        等待元素变为禁用状态（enabled=False）。
+
+        Args:
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果元素在超时前变为禁用，False 否则
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            components = self.__find_components()
+            if components and self._index < len(components):
+                self.__set_component(components[self._index])
+                if not self.isEnabled:
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(self._WAIT_POLL_INTERVAL)
+
+    def wait_clickable(self, timeout: Optional[float] = None) -> bool:
+        """
+        等待元素变为可点击状态（clickable=True）。
+
+        Args:
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果元素在超时前变为可点击，False 否则
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            components = self.__find_components()
+            if components and self._index < len(components):
+                self.__set_component(components[self._index])
+                if self.isClickable:
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(self._WAIT_POLL_INTERVAL)
+
+    def wait_until(
+        self,
+        condition: callable,
+        timeout: Optional[float] = None,
+    ) -> bool:
+        """
+        等待自定义条件满足。
+
+        Args:
+            condition: 条件函数，接收 ElementInfo 对象，返回 bool
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果条件在超时前满足，False 否则
+
+        Example:
+            # 等待文本变为 "完成"
+            d(id="status").wait_until(lambda e: e.text == "完成")
+
+            # 等待元素被选中
+            d(id="checkbox").wait_until(lambda e: e.isChecked)
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            components = self.__find_components()
+            if components and self._index < len(components):
+                self.__set_component(components[self._index])
+                try:
+                    if condition(self.info):
+                        return True
+                except Exception as e:
+                    logger.debug(f"Condition check failed: {e}")
+            if time.time() >= deadline:
+                return False
+            time.sleep(self._WAIT_POLL_INTERVAL)
+
+    def wait_until_not(
+        self,
+        condition: callable,
+        timeout: Optional[float] = None,
+    ) -> bool:
+        """
+        等待自定义条件不再满足。
+
+        Args:
+            condition: 条件函数，接收 ElementInfo 对象，返回 bool
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果条件在超时前不再满足，False 否则
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            components = self.__find_components()
+            if components and self._index < len(components):
+                self.__set_component(components[self._index])
+                try:
+                    if not condition(self.info):
+                        return True
+                except Exception as e:
+                    logger.debug(f"Condition check failed: {e}")
+                    return True  # 元素不存在或出错时，条件不满足
+            else:
+                # 元素不存在
+                return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(self._WAIT_POLL_INTERVAL)
+
     def __set_component(self, component: ComponentData):
         self._component = component
 

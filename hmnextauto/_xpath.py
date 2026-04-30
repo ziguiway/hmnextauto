@@ -122,6 +122,124 @@ class _XMLElement:
                 return False
             time.sleep(_WAIT_POLL_INTERVAL)
 
+    def wait_enabled(self, timeout: Optional[float] = None) -> bool:
+        """
+        等待元素变为可用状态（enabled="true"）。
+
+        Args:
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果元素在超时前变为可用，False 否则
+        """
+        if timeout is None:
+            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, float(timeout))
+        while True:
+            el = _XPath._resolve(self._d, self._xpath)
+            if el.exists():
+                self._merge_state_from(el)
+                if self.info.get("enabled", "false").lower() == "true":
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(_WAIT_POLL_INTERVAL)
+
+    def wait_clickable(self, timeout: Optional[float] = None) -> bool:
+        """
+        等待元素变为可点击状态（clickable="true"）。
+
+        Args:
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果元素在超时前变为可点击，False 否则
+        """
+        if timeout is None:
+            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, float(timeout))
+        while True:
+            el = _XPath._resolve(self._d, self._xpath)
+            if el.exists():
+                self._merge_state_from(el)
+                if self.info.get("clickable", "false").lower() == "true":
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(_WAIT_POLL_INTERVAL)
+
+    def wait_until(
+        self,
+        condition: callable,
+        timeout: Optional[float] = None,
+    ) -> bool:
+        """
+        等待自定义条件满足。
+
+        Args:
+            condition: 条件函数，接收元素属性 dict，返回 bool
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果条件在超时前满足，False 否则
+
+        Example:
+            # 等待文本变为 "完成"
+            d.xpath('//Text[@id="status"]').wait_until(lambda e: e.get("text") == "完成")
+
+            # 等待元素被选中
+            d.xpath('//Checkbox').wait_until(lambda e: e.get("checked") == "true")
+        """
+        if timeout is None:
+            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, float(timeout))
+        while True:
+            el = _XPath._resolve(self._d, self._xpath)
+            if el.exists():
+                self._merge_state_from(el)
+                try:
+                    if condition(self.info):
+                        return True
+                except Exception as e:
+                    logger.debug(f"Condition check failed: {e}")
+            if time.time() >= deadline:
+                return False
+            time.sleep(_WAIT_POLL_INTERVAL)
+
+    def wait_until_not(
+        self,
+        condition: callable,
+        timeout: Optional[float] = None,
+    ) -> bool:
+        """
+        等待自定义条件不再满足。
+
+        Args:
+            condition: 条件函数，接收元素属性 dict，返回 bool
+            timeout: 最大等待时间（秒），默认 20.0
+
+        Returns:
+            True 如果条件在超时前不再满足，False 否则
+        """
+        if timeout is None:
+            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        deadline = time.time() + max(0.0, float(timeout))
+        while True:
+            el = _XPath._resolve(self._d, self._xpath)
+            if el.exists():
+                self._merge_state_from(el)
+                try:
+                    if not condition(self.info):
+                        return True
+                except Exception as e:
+                    logger.debug(f"Condition check failed: {e}")
+                    return True
+            else:
+                return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(_WAIT_POLL_INTERVAL)
+
     def _verify(self):
         if not self.bounds:
             raise XmlElementNotFoundError("xpath not found")
