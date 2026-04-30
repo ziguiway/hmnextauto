@@ -19,6 +19,7 @@
 - [Toast 监控](#toast-监控)
 - [屏幕录制](#屏幕录制)
 - [文件操作](#文件操作)
+- [性能监控](#性能监控)
 - [HDC 命令](#hdc-命令)
 
 ---
@@ -107,6 +108,11 @@ d.uninstall_app("com.example.app")
 | `display_size` | 屏幕分辨率 | `Tuple[int, int]` |
 | `display_rotation` | 屏幕旋转状态 | `DisplayRotation` |
 | `set_display_rotation(rotation)` | 设置屏幕旋转 | `None` |
+| `battery_level` | 电池电量 | `int` |
+| `battery_status` | 电池充电状态 | `str` |
+| `screen_brightness` | 屏幕亮度 | `int` |
+| `network_type` | 网络类型 | `str` |
+| `is_screen_on` | 屏幕是否亮起 | `bool` |
 
 ### 示例代码
 
@@ -131,6 +137,19 @@ print(f"分辨率: {width}x{height}")
 # 获取/设置屏幕旋转
 rotation = d.display_rotation
 d.set_display_rotation(DisplayRotation.ROTATION_180)
+
+# 获取电池信息
+print(f"电池电量: {d.battery_level}")      # 0-100
+print(f"电池状态: {d.battery_status}")    # DISCHARGING/CHARGING/FULL/NOT_CHARGING
+
+# 获取屏幕亮度
+print(f"屏幕亮度: {d.screen_brightness}")  # 1-255
+
+# 获取网络类型
+print(f"网络类型: {d.network_type}")      # WiFi/MOBILE/NO_NETWORK
+
+# 检查屏幕状态
+print(f"屏幕亮起: {d.is_screen_on}")      # True/False
 ```
 
 ---
@@ -639,6 +658,116 @@ d.pull_file("/data/local/tmp/test.png", "./test.png")
 
 # 推送文件到设备
 d.push_file("./local.txt", "/data/local/tmp/remote.txt")
+```
+
+---
+
+## 性能监控
+
+| API | 说明 | 返回类型 |
+|-----|------|----------|
+| `memory_info()` | 获取系统内存信息 | `Dict` |
+| `memory_info(package)` | 获取指定应用内存信息 | `Dict` |
+| `cpu_usage()` | 获取 CPU 使用率 | `Dict` |
+| `cpu_freq()` | 获取 CPU 频率 | `List[Dict]` |
+| `refresh_rate` | 获取屏幕刷新率 | `int` |
+| `fps()` | 获取实时 FPS | `float` |
+| `frame_hitchs()` | 获取帧卡顿统计 | `Dict` |
+| `app_start_time(package)` | 获取应用启动时间戳 | `int` |
+| `measure_cold_start(package)` | 测量冷启动时间 | `Dict` |
+| `measure_hot_start(package)` | 测量热启动时间 | `Dict` |
+| `process_info(package)` | 获取进程信息 | `Dict` |
+
+### 示例代码
+
+```python
+# 获取系统内存信息（所有进程汇总）
+sys_mem = d.memory_info()
+print(f"总 PSS: {sys_mem['total_pss'] / 1024:.1f} MB")
+print(f"进程数: {sys_mem['process_count']}")
+
+# 获取指定应用内存信息
+app_mem = d.memory_info("com.huawei.hmos.camera")
+print(f"总 PSS: {app_mem['total_pss'] / 1024:.1f} MB")
+print(f"Native Heap: {app_mem['native_heap'] / 1024:.1f} MB")
+print(f"Ark TS Heap: {app_mem['ark_ts_heap'] / 1024:.1f} MB")
+print(f"Graph: {app_mem['graph'] / 1024:.1f} MB")
+
+# 获取 CPU 使用率
+cpu = d.cpu_usage()
+print(f"总使用率: {cpu['total']}%")
+print(f"用户态: {cpu['user']}%")
+print(f"内核态: {cpu['kernel']}%")
+print(f"进程数: {len(cpu['processes'])}")
+
+# 获取 CPU 频率
+freqs = d.cpu_freq()
+for f in freqs:
+    print(f"CPU {f['cpu']}: {f['current'] / 1000} MHz / {f['max'] / 1000} MHz")
+
+# 获取屏幕刷新率
+print(f"刷新率: {d.refresh_rate} Hz")
+
+# 获取实时 FPS
+fps = d.fps()
+print(f"当前 FPS: {fps}")
+
+# 获取帧卡顿统计
+hitchs = d.frame_hitchs()
+print(f"超过 16ms: {hitchs['over_16ms']}")
+print(f"超过 33ms: {hitchs['over_33ms']}")
+print(f"超过 66ms: {hitchs['over_66ms']}")
+
+# 获取应用启动时间戳（系统启动后的时间）
+start_time = d.app_start_time("com.huawei.hmos.camera")
+print(f"启动时间戳: {start_time} ms")
+
+# 测量冷启动时间（先停止应用再启动）
+cold_result = d.measure_cold_start("com.huawei.hmos.settings")
+print(f"冷启动成功: {cold_result['success']}")
+print(f"冷启动时间: {cold_result['duration_ms']} ms")
+
+# 测量热启动时间（应用在后台，切回前台）
+hot_result = d.measure_hot_start("com.huawei.hmos.settings")
+print(f"热启动成功: {hot_result['success']}")
+print(f"热启动时间: {hot_result['duration_ms']} ms")
+
+# 获取进程信息
+info = d.process_info("com.huawei.hmos.camera")
+print(f"PID: {info['pid']}")
+print(f"包名: {info['package_name']}")
+print(f"总 PSS: {info['total_pss'] / 1024:.1f} MB")
+```
+
+### 性能监控完整示例
+
+```python
+import time
+from hmnextauto.driver import Driver
+
+d = Driver()
+
+# 启动应用并监控性能
+d.force_start_app("com.example.app")
+
+# 等待应用启动
+time.sleep(2)
+
+# 性能快照
+print("=== 性能快照 ===")
+print(f"FPS: {d.fps():.1f}")
+print(f"CPU: {d.cpu_usage()['total']:.1f}%")
+
+app_mem = d.memory_info("com.example.app")
+print(f"内存: {app_mem['total_pss'] / 1024:.1f} MB")
+
+hitchs = d.frame_hitchs()
+print(f"卡顿帧: {hitchs['over_16ms']}")
+
+# 持续监控
+for i in range(10):
+    time.sleep(1)
+    print(f"[{i+1}] FPS: {d.fps():.1f}, CPU: {d.cpu_usage()['total']:.1f}%")
 ```
 
 ---

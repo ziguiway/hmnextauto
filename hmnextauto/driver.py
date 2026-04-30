@@ -649,6 +649,316 @@ class Driver:
             displayRotation=self.display_rotation
         )
 
+    @cached_property
+    def battery_level(self) -> int:
+        """
+        Get the current battery level.
+
+        Returns:
+            int: Battery level (0-100)
+        """
+        return self.hdc.battery_info().get("capacity", 0)
+
+    @cached_property
+    def battery_status(self) -> str:
+        """
+        Get the current battery charging status.
+
+        Returns:
+            str: Charging status - "DISCHARGING", "NOT_CHARGING", "CHARGING", "FULL", or "UNKNOWN"
+        """
+        status_map = {
+            1: "DISCHARGING",
+            2: "NOT_CHARGING",
+            3: "CHARGING",
+            4: "FULL"
+        }
+        code = self.hdc.battery_info().get("chargingStatus", 1)
+        return status_map.get(code, "UNKNOWN")
+
+    @cached_property
+    def screen_brightness(self) -> int:
+        """
+        Get the current screen brightness.
+
+        Returns:
+            int: Screen brightness value (1-255)
+        """
+        return self.hdc.screen_brightness()
+
+    @cached_property
+    def network_type(self) -> str:
+        """
+        Get the current network type.
+
+        Returns:
+            str: Network type - "WiFi", "MOBILE", or "NO_NETWORK"
+        """
+        return self.hdc.network_type()
+
+    @cached_property
+    def is_screen_on(self) -> bool:
+        """
+        Check if the screen is currently on.
+
+        Returns:
+            bool: True if screen is on (AWAKE), False otherwise
+        """
+        state = self.hdc.screen_state()
+        return state == "AWAKE"
+
+    # ============================================
+    # Performance Monitoring Methods
+    # ============================================
+
+    def memory_info(self, package_name: Optional[str] = None) -> Dict:
+        """
+        Get memory information.
+
+        Args:
+            package_name: Package name to get memory for. If None, returns system-wide memory info.
+
+        Returns:
+            Dict: Memory information including total_pss, native_heap, ark_ts_heap, graph, etc.
+        """
+        return self.hdc.memory_info(package_name)
+
+    def cpu_usage(self) -> Dict:
+        """
+        Get CPU usage information.
+
+        Returns:
+            Dict: CPU usage including total, user, kernel percentages and per-process usage.
+        """
+        return self.hdc.cpu_usage()
+
+    def cpu_freq(self) -> List[Dict]:
+        """
+        Get CPU frequency information for each core.
+
+        Returns:
+            List[Dict]: List of CPU frequency info, each containing cpu, current, and max frequency.
+        """
+        return self.hdc.cpu_freq()
+
+    @cached_property
+    def refresh_rate(self) -> int:
+        """
+        Get the current screen refresh rate.
+
+        Returns:
+            int: Current refresh rate in Hz (e.g., 60, 90, 120).
+        """
+        return self.hdc.refresh_rate()
+
+    def fps(self) -> float:
+        """
+        Get the current FPS (frames per second).
+
+        Calculates FPS from recent frame timestamps.
+
+        Returns:
+            float: Current FPS value.
+        """
+        timestamps = self.hdc.fps_timestamps()
+        if len(timestamps) < 2:
+            return 0.0
+
+        # Sort timestamps (they come in descending order)
+        timestamps = sorted(timestamps)
+
+        # Calculate time differences between consecutive frames
+        diffs = []
+        for i in range(1, len(timestamps)):
+            diff = timestamps[i] - timestamps[i-1]
+            if diff > 0:
+                diffs.append(diff)
+
+        if not diffs:
+            return 0.0
+
+        # Average time difference in nanoseconds
+        avg_diff = sum(diffs) / len(diffs)
+
+        # Convert to FPS (nanoseconds to seconds)
+        fps_value = 1000000000 / avg_diff
+        return round(fps_value, 2)
+
+    def frame_hitchs(self) -> Dict:
+        """
+        Get frame hitch (jank) statistics.
+
+        Returns:
+            Dict: Hitch statistics with over_16ms, over_33ms, over_66ms counts.
+        """
+        return self.hdc.frame_hitchs()
+
+    def app_start_time(self, package_name: str) -> Optional[int]:
+        """
+        Get the start timestamp of an application (system uptime when started).
+
+        Note: This returns the system uptime timestamp when the app was started,
+        not the actual startup duration. Use measure_cold_start() or measure_hot_start()
+        to measure actual startup time.
+
+        Args:
+            package_name: The package name to look up.
+
+        Returns:
+            Optional[int]: Start timestamp in milliseconds (system uptime), or None if not found.
+        """
+        data: CommandResult = self.hdc.shell("aa dump -l")
+        output = data.output
+
+        # Find the mission block for the package
+        mission_pattern = r'Mission ID #\d+.*?mission name #\[#' + re.escape(package_name) + r'.*?\]'
+        mission_match = re.search(mission_pattern, output, re.DOTALL)
+
+        if mission_match:
+            mission_block = mission_match.group(0)
+            # Parse: start time [137245554]
+            time_match = re.search(r'start time \[(\d+)\]', mission_block)
+            if time_match:
+                return int(time_match.group(1))
+
+        return None
+
+    def measure_cold_start(self, package: str, ability: str = None, timeout: float = 10.0) -> Dict:
+        """
+        Measure cold start time for an application.
+
+        This method:
+        1. Stops the app (force cold start)
+        2. Starts the app and measures the time until the first frame is drawn
+
+        Args:
+            package: Package name.
+            ability: Ability name (optional, will auto-detect if not provided).
+            timeout: Maximum time to wait for app to start.
+
+        Returns:
+            Dict: {
+                'success': bool,
+                'duration_ms': int,  # Total cold start time in milliseconds
+                'package': str,
+                'ability': str
+            }
+        """
+        import time
+
+        result = {
+            'success': False,
+            'duration_ms': 0,
+            'package': package,
+            'ability': ability or ''
+        }
+
+        # Stop the app first (cold start)
+        self.stop_app(package)
+        time.sleep(0.5)
+
+        # Measure start time
+        start_time = time.perf_counter()
+
+        # Start the app
+        if ability:
+            self.start_app(package, ability)
+        else:
+            self.start_app(package)
+
+        # Wait for the app to appear in the foreground
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            current_pkg, _ = self.current_app()
+            if current_pkg == package:
+                result['success'] = True
+                break
+            time.sleep(0.05)
+
+        end_time = time.perf_counter()
+        result['duration_ms'] = int((end_time - start_time) * 1000)
+
+        return result
+
+    def measure_hot_start(self, package: str, wait_time: float = 2.0, timeout: float = 5.0) -> Dict:
+        """
+        Measure hot start time for an application.
+
+        This method:
+        1. Assumes the app is already running in background
+        2. Brings it to foreground and measures the time
+
+        Args:
+            package: Package name.
+            wait_time: Time to wait before measuring (to ensure app is in background).
+            timeout: Maximum time to wait for app to come to foreground.
+
+        Returns:
+            Dict: {
+                'success': bool,
+                'duration_ms': int,  # Hot start time in milliseconds
+                'package': str
+            }
+        """
+        import time
+
+        result = {
+            'success': False,
+            'duration_ms': 0,
+            'package': package
+        }
+
+        # Go home first to put app in background
+        self.go_home()
+        time.sleep(wait_time)
+
+        # Measure start time
+        start_time = time.perf_counter()
+
+        # Start the app (hot start from background)
+        self.start_app(package)
+
+        # Wait for the app to appear in the foreground
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            current_pkg, _ = self.current_app()
+            if current_pkg == package:
+                result['success'] = True
+                break
+            time.sleep(0.05)
+
+        end_time = time.perf_counter()
+        result['duration_ms'] = int((end_time - start_time) * 1000)
+
+        return result
+
+    def process_info(self, package_name: str) -> Optional[Dict]:
+        """
+        Get process information for a package.
+
+        Args:
+            package_name: The package name to look up.
+
+        Returns:
+            Optional[Dict]: Process info including pid, memory, etc., or None if not found.
+        """
+        # Get memory info (which also finds PID)
+        mem_info = self.hdc.memory_info(package_name)
+        if not mem_info:
+            return None
+
+        # Get PID
+        pid = self.hdc._get_pid(package_name)
+
+        return {
+            "pid": pid,
+            "package_name": package_name,
+            "total_pss": mem_info.get("total_pss", 0),
+            "native_heap": mem_info.get("native_heap", 0),
+            "ark_ts_heap": mem_info.get("ark_ts_heap", 0),
+            "graph": mem_info.get("graph", 0)
+        }
+
     @delay
     def open_url(self, url: str, system_browser: bool = True):
         if system_browser:

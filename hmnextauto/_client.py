@@ -222,7 +222,7 @@ class _UITestService:
 
     def _get_local_agent_path(self) -> str:
         """Return the local path of the agent file."""
-        target_agent = "uitest_agent_v1.2.2.so"
+        target_agent = "uitest_agent_v1.1.0.so"
         return os.path.join(os.path.dirname(os.path.realpath(__file__)), "assets", target_agent)
 
     def _get_remote_md5sum(self, file_path: str) -> Optional[str]:

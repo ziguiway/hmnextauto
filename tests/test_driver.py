@@ -279,3 +279,45 @@ def test_xpath_wait(d):
     assert d.xpath(no_match).wait(timeout=0.3) is False
     assert d.xpath(no_match).wait_gone(timeout=0.2) is True
     assert d.xpath(xpath1).wait_gone(timeout=0.2) is False
+
+
+# ============================================
+# 设备信息扩展测试
+# ============================================
+
+def test_battery_level(d):
+    """测试电池电量获取"""
+    level = d.battery_level
+    print(f"电池电量: {level}")
+    assert isinstance(level, int)
+    assert 0 <= level <= 100
+
+
+def test_battery_status(d):
+    """测试电池状态获取"""
+    status = d.battery_status
+    print(f"电池状态: {status}")
+    assert status in ["DISCHARGING", "NOT_CHARGING", "CHARGING", "FULL", "UNKNOWN"]
+
+
+def test_screen_brightness(d):
+    """测试屏幕亮度获取"""
+    brightness = d.screen_brightness
+    print(f"屏幕亮度: {brightness}")
+    assert isinstance(brightness, int)
+    assert 0 <= brightness <= 255
+
+
+def test_network_type(d):
+    """测试网络类型获取"""
+    network = d.network_type
+    print(f"网络类型: {network}")
+    assert network in ["WiFi", "MOBILE", "NO_NETWORK"]
+
+
+def test_is_screen_on(d):
+    """测试屏幕状态检查"""
+    d.screen_on()
+    time.sleep(0.5)
+    assert d.is_screen_on is True
+    print(f"屏幕亮起: {d.is_screen_on}")
