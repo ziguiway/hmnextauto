@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hmnextauto"
-version = "1.1.5"
+version = "1.2.0"
 description = "UI Automation Framework for Harmony Next"
 authors = ["ziguiway <ziguiway@163.com>"]
 license = "MIT"
