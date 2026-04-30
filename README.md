@@ -29,6 +29,10 @@
 | 视觉定位       |      ✅ 多尺度模板匹配     |      ❌      |       ❌      |
 | 找色点击       |     ✅ RGB 容差匹配     |      ❌      |       ❌      |
 | 后台 Watcher |    ✅ 纯 Python 实现   |      ❌      |       ✅      |
+| XPath 多元素操作 |    ✅ count/all/first/last   |      ❌      |       ❌      |
+| 通知栏操作      |     ✅ 完整通知栏控制      |      ❌      |       ❌      |
+| 性能监控      |     ✅ 后台性能采集      |      ❌      |       ❌      |
+| 智能等待条件      |     ✅ wait_enabled/wait_clickable/wait_until      |      ❌      |       ❌      |
 | 依赖复杂度      | 🟢 仅 lxml + opencv |     🔴 重    |     🟢 轻     |
 
 ***
@@ -87,9 +91,135 @@ print(d.device_info)
 
 ***
 
-## ✨ 核心功能
+## ✨ 增强功能详解
 
-### 1. 无缝迁移：从 uiautomator2 到鸿蒙 NEXT
+> 以下功能均为 HMNextAuto 相比原版 hmdriver2 的**新增增强功能**
+
+### 1. XPath 多元素操作 🆕
+
+支持对匹配到的多个元素进行批量操作：
+
+```python
+# 获取匹配元素数量
+count = d.xpath('//*[@clickable="true"]').count
+
+# 获取所有匹配元素
+elements = d.xpath('//*[@clickable="true"]').all()
+for el in elements:
+    print(el.bounds)
+    el.click()
+
+# 快速获取首/末元素
+first = d.xpath('//*[@clickable="true"]').first()
+last = d.xpath('//*[@clickable="true"]').last()
+```
+
+### 2. 通知栏操作 🆕
+
+完整的下拉通知栏和快捷开关控制：
+
+```python
+# 打开通知栏（消息中心）
+d.notification.open()
+
+# 打开快捷设置面板
+d.notification.open_quick_settings()
+
+# 点击快捷开关
+d.notification.click_quick_setting("wifi")        # WiFi
+d.notification.click_quick_setting("bluetooth")   # 蓝牙
+d.notification.click_quick_setting("airplane")    # 飞行模式
+d.notification.click_quick_setting("flashlight")  # 手电筒
+
+# 设置亮度 (0-255)
+d.notification.set_brightness(128)
+
+# 关闭通知栏
+d.notification.close()
+```
+
+### 3. 性能监控 🆕
+
+后台自动采集设备性能数据：
+
+```python
+from hmnextauto import PerformanceWatcher
+
+# 创建性能监控器
+perf = PerformanceWatcher(d)
+
+# 开始后台监控（每隔 1 秒采集一次）
+perf.start(interval=1.0)
+
+# 执行测试操作...
+d(text="按钮").click()
+
+# 停止并获取报告
+perf.stop()
+report = perf.get_report()
+print(f"平均 FPS: {report['fps']['avg']}")
+print(f"平均内存: {report['memory']['avg']} MB")
+print(f"CPU 使用率峰值: {report['cpu']['max']}%")
+```
+
+### 4. 智能等待条件 🆕
+
+更丰富的控件等待条件：
+
+```python
+# 等待控件可点击
+d(text="按钮").wait_clickable(timeout=10)
+
+# 等待控件启用
+d(text="输入框").wait_enabled(timeout=5)
+
+# 自定义等待条件
+d(text="列表").wait_until(lambda el: el.info["scrollable"], timeout=10)
+```
+
+### 5. 视觉定位能力
+
+```python
+# 图像匹配点击（支持多尺度）
+ok = d.click_image("target.png", threshold=0.88)
+
+# 找色点击（RGB 容差匹配）
+d.click_color((255, 0, 0), tolerance=12)
+
+# 限制区域找色
+d.click_color((0, 160, 255), tolerance=10, region=(100, 400, 600, 1200))
+```
+
+### 6. 后台 Watcher 自动处理弹窗
+
+```python
+# 自动处理常见弹窗
+d.watcher("ad").when_xpath('//*[@text="跳过"]').click()
+d.watcher("ok").when(text="确定").click()
+d.watcher.start(interval=0.3)
+
+# 主流程执行
+d.start_app("com.example.app")
+
+d.watcher.stop()
+```
+
+### 7. 模糊匹配选择器
+
+```python
+# 子串匹配
+d(textContains="登").click()
+
+# 正则匹配
+d(textMatches=r"^\d+条$").click()
+
+# 资源 ID 模糊匹配
+d(resourceIdContains="entry", type="Button").click()
+```
+
+***
+
+## 🔄 从 uiautomator2 无缝迁移
 
 如果你熟悉 Android 的 `uiautomator2`，**零学习成本**直接上手：
 
@@ -105,56 +235,6 @@ from hmnextauto.driver import Driver
 d = Driver()
 d(text="精选").click()
 d.swipe(0.5, 0.8, 0.5, 0.2)
-```
-
-### 2. 视觉定位能力
-
-```python
-# 图像匹配点击（支持多尺度）
-ok = d.click_image("target.png", threshold=0.88)
-
-# 找色点击（RGB 容差匹配）
-d.click_color((255, 0, 0), tolerance=12)
-
-# 限制区域找色
-d.click_color((0, 160, 255), tolerance=10, region=(100, 400, 600, 1200))
-```
-
-### 3. XPath 定位增强
-
-```python
-# 等待控件出现
-d.xpath('//Text[@text="精选"]').wait(timeout=10).click()
-
-# 等待控件消失
-d.xpath('//ProgressBar').wait_gone(timeout=5)
-```
-
-### 4. 后台 Watcher 自动处理弹窗
-
-```python
-# 自动处理常见弹窗
-d.watcher("ad").when_xpath('//*[@text="跳过"]').click()
-d.watcher("ok").when(text="确定").click()
-d.watcher.start(interval=0.3)
-
-# 主流程执行
-d.start_app("com.example.app")
-
-d.watcher.stop()
-```
-
-### 5. 模糊匹配选择器
-
-```python
-# 子串匹配
-d(textContains="登").click()
-
-# 正则匹配
-d(textMatches=r"^\d+条$").click()
-
-# 资源 ID 模糊匹配
-d(resourceIdContains="entry", type="Button").click()
 ```
 
 ***
@@ -287,6 +367,7 @@ export HDC_SERVER_PORT=8710
 
 | 版本     | 日期         | 主要更新                           |
 | ------ | ---------- | ------------------------------ |
+| v1.3.0 | 2026-04-30 | 🆕 新增通知栏操作、XPath 多元素操作、性能监控、智能等待条件 |
 | v1.2.0 | 2026-04-29 | 升级 uitest\_agent v1.2.2，统一调用逻辑 |
 | v1.1.0 | 2026-04-24 | 新增视觉定位功能（多尺度模板匹配、找色点击）         |
 | v1.0.5 | 2026-04-23 | XPath wait/wait\_gone 方法       |
@@ -323,7 +404,5 @@ export HDC_SERVER_PORT=8710
 [MIT License](LICENSE)
 
 ***
+  如果这个项目对你有帮助，请给一个 ⭐️ Star 支持一下！
 
-<p align="center">
-如果这个项目对你有帮助，请给一个 ⭐️ Star 支持一下！
-</p>
