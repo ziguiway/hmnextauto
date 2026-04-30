@@ -20,6 +20,7 @@
 - [屏幕录制](#屏幕录制)
 - [文件操作](#文件操作)
 - [性能监控](#性能监控)
+- [后台性能监控](#后台性能监控)
 - [HDC 命令](#hdc-命令)
 
 ---
@@ -677,6 +678,7 @@ d.push_file("./local.txt", "/data/local/tmp/remote.txt")
 | `measure_cold_start(package)` | 测量冷启动时间 | `Dict` |
 | `measure_hot_start(package)` | 测量热启动时间 | `Dict` |
 | `process_info(package)` | 获取进程信息 | `Dict` |
+| `performance_watcher` | 后台持续性能监控 | `PerformanceWatcher` |
 
 ### 示例代码
 
@@ -769,6 +771,81 @@ for i in range(10):
     time.sleep(1)
     print(f"[{i+1}] FPS: {d.fps():.1f}, CPU: {d.cpu_usage()['total']:.1f}%")
 ```
+
+---
+
+## 后台性能监控
+
+PerformanceWatcher 用于在测试过程中持续监控性能指标，后台线程采集数据并导出到文件。
+
+| API | 说明 |
+|-----|------|
+| `performance_watcher` | 获取 PerformanceWatcher 实例 |
+| `.configure(metrics, package, output_file, interval)` | 配置监控参数 |
+| `.start(output_file, interval)` | 启动监控 |
+| `.stop()` | 停止监控 |
+| `.running` | 是否运行中 |
+| `.get_summary()` | 获取统计摘要 |
+
+### 支持的指标
+
+| 指标 | 说明 |
+|------|------|
+| `fps` | 实时帧率 |
+| `cpu` | CPU 使用率 |
+| `cpu_freq` | 各核心 CPU 频率 |
+| `memory` | 内存 PSS |
+| `hitches` | 帧卡顿统计 |
+
+### 示例代码
+
+```python
+# 方式1: 简单用法 - 监控所有指标
+pw = d.performance_watcher
+pw.start(output_file="perf.jsonl", interval=1.0)
+# ... 执行业务测试 ...
+pw.stop()
+
+# 方式2: 指定应用和指标
+pw.configure(
+    metrics=["fps", "cpu", "memory"],
+    package="com.example.app",
+    output_file="app_perf.jsonl",
+    interval=0.5
+).start()
+# ... 测试 ...
+pw.stop()
+
+# 方式3: 上下文管理器（推荐）
+with d.performance_watcher.start("perf.jsonl", interval=0.5):
+    d(text="按钮").click()
+    # ... 自动停止并保存
+
+# 获取统计摘要
+summary = pw.get_summary()
+print(f"采样次数: {summary['count']}")
+print(f"FPS 平均: {summary['metrics']['fps']['avg']}")
+print(f"CPU 平均: {summary['metrics']['cpu_percent']['avg']}%")
+print(f"内存平均: {summary['metrics']['memory_pss']['avg']} KB")
+```
+
+### 数据文件格式
+
+输出文件采用 JSON Lines 格式 (`.jsonl`)，每行一个 JSON 对象：
+
+```json
+{"timestamp": "2026-04-30T12:00:00.123456", "fps": 59.5, "cpu_percent": 15.2, "cpu_freqs": [{"cpu": 0, "current": 650000, "max": 1720000}, {"cpu": 1, "current": 650000, "max": 1720000}], "memory_pss": 250000, "memory_native": 40000, "memory_ark": 50000, "hitches": {"over_16ms": 0, "over_33ms": 0, "over_66ms": 0}}
+```
+
+字段说明：
+- `timestamp`: ISO 8601 格式时间戳
+- `fps`: 帧率 (float)
+- `cpu_percent`: CPU 使用率百分比 (float)
+- `cpu_freqs`: 各核心频率列表 `[{"cpu": 0, "current": kHz, "max": kHz}, ...]`
+- `memory_pss`: 总 PSS 内存 KB (int)
+- `memory_native`: Native heap KB (int)
+- `memory_ark`: Ark TS heap KB (int)
+- `hitches`: 帧卡顿统计 `{"over_16ms": n, "over_33ms": n, "over_66ms": n}`
 
 ---
 
