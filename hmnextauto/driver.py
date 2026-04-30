@@ -827,9 +827,12 @@ class Driver:
         """
         Measure cold start time for an application.
 
-        This method:
-        1. Stops the app (force cold start)
-        2. Starts the app and measures the time until the first frame is drawn
+        This method measures the time for the `aa start` command to complete.
+        Cold start is when the app process is not running and needs to be created.
+
+        Note: Cold start takes longer because:
+        - App process needs to be created
+        - App resources need to be loaded from scratch
 
         Args:
             package: Package name.
@@ -839,7 +842,7 @@ class Driver:
         Returns:
             Dict: {
                 'success': bool,
-                'duration_ms': int,  # Total cold start time in milliseconds
+                'duration_ms': int,  # Cold start time in milliseconds
                 'package': str,
                 'ability': str
             }
@@ -853,29 +856,25 @@ class Driver:
             'ability': ability or ''
         }
 
+        # Get ability name BEFORE stopping app and timing (so parsing doesn't affect measurement)
+        if not ability:
+            ability_info = self.get_app_main_ability(package)
+            ability = ability_info.get('name', 'MainAbility')
+            result['ability'] = ability
+
         # Stop the app first (cold start)
         self.stop_app(package)
         time.sleep(0.5)
 
-        # Measure start time
+        # Measure start time - only the aa start command
         start_time = time.perf_counter()
 
-        # Start the app
-        if ability:
-            self.start_app(package, ability)
-        else:
-            self.start_app(package)
-
-        # Wait for the app to appear in the foreground
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            current_pkg, _ = self.current_app()
-            if current_pkg == package:
-                result['success'] = True
-                break
-            time.sleep(0.05)
+        cmd_result = self.hdc.shell(f"aa start -a {ability} -b {package}")
 
         end_time = time.perf_counter()
+
+        # Check if start was successful
+        result['success'] = 'successfully' in cmd_result.output.lower()
         result['duration_ms'] = int((end_time - start_time) * 1000)
 
         return result
@@ -884,20 +883,25 @@ class Driver:
         """
         Measure hot start time for an application.
 
-        This method:
-        1. Assumes the app is already running in background
-        2. Brings it to foreground and measures the time
+        This method measures the time for the `aa start` command to complete.
+        Hot start is when the app is already running in background and just needs
+        to be brought to foreground.
+
+        Note: Hot start should be faster than cold start because:
+        - App process is already running in background
+        - No need to load app resources from scratch
 
         Args:
             package: Package name.
-            wait_time: Time to wait before measuring (to ensure app is in background).
+            wait_time: Time to wait in background before measuring.
             timeout: Maximum time to wait for app to come to foreground.
 
         Returns:
             Dict: {
                 'success': bool,
                 'duration_ms': int,  # Hot start time in milliseconds
-                'package': str
+                'package': str,
+                'ability': str
             }
         """
         import time
@@ -905,29 +909,36 @@ class Driver:
         result = {
             'success': False,
             'duration_ms': 0,
-            'package': package
+            'package': package,
+            'ability': ''
         }
 
-        # Go home first to put app in background
+        # Step 1: Ensure app is running and get its ability name
+        # This is done BEFORE timing starts, so parsing time doesn't affect measurement
+        current_pkg, _ = self.current_app()
+        if current_pkg != package:
+            # Start app first (this will also cache the ability)
+            self.start_app(package)
+            time.sleep(1)
+
+        # Get ability name (already cached from previous start)
+        ability_info = self.get_app_main_ability(package)
+        ability = ability_info.get('name', 'MainAbility')
+        result['ability'] = ability
+
+        # Step 2: Go home to put app in background
         self.go_home()
         time.sleep(wait_time)
 
-        # Measure start time
+        # Step 3: Measure hot start time - only the aa start command
         start_time = time.perf_counter()
 
-        # Start the app (hot start from background)
-        self.start_app(package)
-
-        # Wait for the app to appear in the foreground
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            current_pkg, _ = self.current_app()
-            if current_pkg == package:
-                result['success'] = True
-                break
-            time.sleep(0.05)
+        cmd_result = self.hdc.shell(f"aa start -a {ability} -b {package}")
 
         end_time = time.perf_counter()
+
+        # Check if start was successful
+        result['success'] = 'successfully' in cmd_result.output.lower()
         result['duration_ms'] = int((end_time - start_time) * 1000)
 
         return result

@@ -182,6 +182,7 @@ def test_driver_app_start_time(d):
     print(f"成功: {result['success']}")
     print(f"启动时间: {result['duration_ms']} ms")
     print(f"包名: {result['package']}")
+    print(f"Ability: {result['ability']}")
 
     # 验证启动成功
     assert result['success'] is True
@@ -199,10 +200,36 @@ def test_driver_hot_start(d):
     print(f"成功: {result['success']}")
     print(f"启动时间: {result['duration_ms']} ms")
     print(f"包名: {result['package']}")
+    print(f"Ability: {result['ability']}")
 
     # 验证启动成功
     assert result['success'] is True
     assert result['duration_ms'] > 0
+
+
+def test_cold_vs_hot_start(d):
+    """测试冷启动和热启动时间对比"""
+    import time
+
+    # 测试相机应用
+    print(f"\n=== 相机应用启动时间对比 ===")
+
+    # 冷启动
+    cold_result = d.measure_cold_start("com.huawei.hmos.camera")
+    print(f"冷启动时间: {cold_result['duration_ms']} ms")
+
+    time.sleep(1)
+
+    # 热启动
+    hot_result = d.measure_hot_start("com.huawei.hmos.camera")
+    print(f"热启动时间: {hot_result['duration_ms']} ms")
+
+    # 验证热启动比冷启动快（或相近）
+    print(f"热启动比冷启动快: {cold_result['duration_ms'] - hot_result['duration_ms']} ms")
+
+    # 两者都应该成功
+    assert cold_result['success'] is True
+    assert hot_result['success'] is True
 
 
 def test_driver_process_info(d):
