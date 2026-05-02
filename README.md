@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/hmnextauto.svg)](https://pypi.python.org/pypi/hmnextauto)
 [![Python](https://img.shields.io/pypi/pyversions/hmnextauto.svg)](https://pypi.org/project/hmnextauto)
 [![License](https://img.shields.io/github/license/ziguiway/HMNextAuto.svg)](https://github.com/ziguiway/HMNextAuto/blob/main/LICENSE)
+[![Downloads](https://pepy.tech/badge/hmnextauto)](https://pepy.tech/project/hmnextauto)
 
 > **持续维护的鸿蒙 NEXT 无侵入式 UI 自动化框架**，对齐 uiautomator2 API，零学习成本！
 
