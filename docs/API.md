@@ -7,6 +7,7 @@
 ## 目录
 
 - [初始化](#初始化)
+- [全局配置](#全局配置)
 - [App 管理](#app-管理)
 - [设备信息](#设备信息)
 - [设备操作](#设备操作)
@@ -41,6 +42,51 @@ d = Driver("FMR0223C13000649")
 
 # 关闭连接
 d.close()
+```
+
+---
+
+## 全局配置
+
+### Settings
+
+通过 `d.settings` 访问全局配置，或使用 `d.implicitly_wait()` 快捷方法。
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `wait_timeout` | 元素等待超时（秒） | `20.0` |
+| `poll_interval` | 轮询间隔（秒） | `0.1` |
+| `operation_delay` | 操作前后延迟 `(before, after)` | `(0, 0)` |
+
+### implicitly_wait
+
+```python
+# 设置全局隐式等待为 10 秒
+d.implicitly_wait(10)
+
+# 获取当前超时值
+print(d.implicitly_wait())  # 10.0
+
+# 所有 wait 方法自动使用全局超时
+d(text="确定").wait()                        # 使用 10 秒
+d.xpath('//Button').wait()                    # 使用 10 秒
+
+# 显式 timeout 仍然可以覆盖全局设置
+d(text="确定").wait(timeout=3)               # 使用 3 秒
+```
+
+### Settings 字典访问
+
+```python
+# 查看所有配置
+print(d.settings)
+
+# 读取配置
+print(d.settings["wait_timeout"])       # 20.0
+print(d.settings.get("wait_timeout"))   # 20.0
+
+# 修改配置
+d.settings["wait_timeout"] = 15.0
 ```
 
 ---

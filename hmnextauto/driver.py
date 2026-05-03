@@ -12,6 +12,7 @@ from .utils import delay, image_size
 from ._client import HmClient
 from ._uiobject import UiObject
 from .hdc import list_devices
+from .settings import Settings
 from .exception import (
     AppNameAmbiguousError,
     AppNameNotFoundError,
@@ -98,6 +99,7 @@ class Driver:
         self._client = HmClient(self.serial)
         self.hdc = self._client.hdc
         self._bundle_label_cache: Dict[str, str] = {}
+        self._settings = Settings(self)
         self._init_hmclient()
         self._initialized = True  # Mark the instance as initialized
         del self._serial_for_init  # Clean up temporary attribute
@@ -120,7 +122,30 @@ class Driver:
 
     def __call__(self, **kwargs) -> UiObject:
 
-        return UiObject(self._client, **kwargs)
+        return UiObject(self._client, driver=self, **kwargs)
+
+    @property
+    def settings(self) -> Settings:
+        """获取全局配置"""
+        return self._settings
+
+    def implicitly_wait(self, seconds: Optional[float] = None) -> float:
+        """
+        设置或获取元素等待超时时间。
+
+        Args:
+            seconds: 超时时间（秒），None 表示只获取当前值
+
+        Returns:
+            当前超时时间
+
+        Example:
+            d.implicitly_wait(10)  # 设置为 10 秒
+            print(d.implicitly_wait())  # 获取当前值
+        """
+        if seconds is not None:
+            self._settings["wait_timeout"] = seconds
+        return self._settings["wait_timeout"]
 
     def __del__(self):
         Driver._instance.clear()

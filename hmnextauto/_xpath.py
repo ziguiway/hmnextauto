@@ -82,6 +82,12 @@ class _XMLElement:
         self._d = d
         self._xpath = xpath
 
+    def _get_wait_timeout(self, timeout: Optional[float]) -> float:
+        """获取等待超时时间，优先使用传入值，否则使用全局设置"""
+        if timeout is not None:
+            return timeout
+        return self._d.settings["wait_timeout"]
+
     def _invalidate_center_cache(self) -> None:
         self.__dict__.pop("center", None)
 
@@ -101,8 +107,7 @@ class _XMLElement:
 
         Same timeout semantics as :meth:`hmnextauto._uiobject.UiObject.wait` (seconds, default 20).
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)
@@ -118,8 +123,7 @@ class _XMLElement:
         Re-query until the xpath no longer matches, or the timeout elapses.
         If the node is already absent, returns True immediately.
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)
@@ -139,8 +143,7 @@ class _XMLElement:
         Returns:
             True 如果元素在超时前变为可用，False 否则
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)
@@ -162,8 +165,7 @@ class _XMLElement:
         Returns:
             True 如果元素在超时前变为可点击，False 否则
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)
@@ -197,8 +199,7 @@ class _XMLElement:
             # 等待元素被选中
             d.xpath('//Checkbox').wait_until(lambda e: e.get("checked") == "true")
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)
@@ -228,8 +229,7 @@ class _XMLElement:
         Returns:
             True 如果条件在超时前不再满足，False 否则
         """
-        if timeout is None:
-            timeout = _DEFAULT_XPATH_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, float(timeout))
         while True:
             el = _XPath._resolve(self._d, self._xpath)

@@ -24,8 +24,9 @@ class UiObject:
     DEFAULT_WAIT_TIMEOUT = 20.0
     _WAIT_POLL_INTERVAL = 0.1
 
-    def __init__(self, client: HmClient, **kwargs) -> None:
+    def __init__(self, client: HmClient, driver=None, **kwargs) -> None:
         self._client = client
+        self._driver = driver
         self._raw_kwargs = kwargs
 
         self._index = kwargs.pop("index", 0)
@@ -51,6 +52,14 @@ class UiObject:
             raise ReferenceError("use only one of `id` and `resourceId`")
         if "type" in self._kwargs and "className" in self._kwargs:
             raise ReferenceError("use only one of `type` and `className`")
+
+    def _get_wait_timeout(self, timeout: Optional[float]) -> float:
+        """获取等待超时时间，优先使用传入值，否则使用全局设置"""
+        if timeout is not None:
+            return timeout
+        if self._driver is not None:
+            return self._driver.settings["wait_timeout"]
+        return self.DEFAULT_WAIT_TIMEOUT
 
     def _invoke_on(self, on_name: str, value, pattern: Optional[MatchPattern], this: str = "On#seed") -> str:
         last_err: Optional[Exception] = None
@@ -106,8 +115,7 @@ class UiObject:
         Returns:
             True if a matching component appeared in time, False otherwise.
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
@@ -132,8 +140,7 @@ class UiObject:
             True if the element became absent (or was never present) before timeout, False if it is still
             there when the wait ends.
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             if not self.exists(retries=1, wait_time=0):
@@ -152,8 +159,7 @@ class UiObject:
         Returns:
             True 如果元素在超时前变为可用，False 否则
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
@@ -175,8 +181,7 @@ class UiObject:
         Returns:
             True 如果元素在超时前变为禁用，False 否则
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
@@ -198,8 +203,7 @@ class UiObject:
         Returns:
             True 如果元素在超时前变为可点击，False 否则
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
@@ -233,8 +237,7 @@ class UiObject:
             # 等待元素被选中
             d(id="checkbox").wait_until(lambda e: e.isChecked)
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
@@ -264,8 +267,7 @@ class UiObject:
         Returns:
             True 如果条件在超时前不再满足，False 否则
         """
-        if timeout is None:
-            timeout = self.DEFAULT_WAIT_TIMEOUT
+        timeout = self._get_wait_timeout(timeout)
         deadline = time.time() + max(0.0, timeout)
         while True:
             components = self.__find_components()
