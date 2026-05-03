@@ -147,9 +147,22 @@ class Driver:
             self._settings["wait_timeout"] = seconds
         return self._settings["wait_timeout"]
 
+    def _unregister_singleton_if_self(self) -> None:
+        """
+        Remove this instance from the per-serial singleton map only if the
+        slot still references ``self``. Avoids clearing other devices' entries
+        when one Driver is finalized (previously ``_instance.clear()``).
+        """
+        serial = getattr(self, "serial", None)
+        if serial is None:
+            return
+        inst = Driver._instance.get(serial)
+        if inst is self:
+            Driver._instance.pop(serial, None)
+
     def __del__(self):
-        Driver._instance.clear()
-        if hasattr(self, '_client') and self._client:
+        self._unregister_singleton_if_self()
+        if hasattr(self, "_client") and self._client:
             self._client.release()
 
     def close(self) -> None:
@@ -158,9 +171,13 @@ class Driver:
         the end of a script (e.g. in ``finally``) so cleanup runs before
         interpreter shutdown. :meth:`release` on the client still skips
         ``fport rm`` if :func:`sys.is_finalizing` is true.
+
+        Also removes this ``serial`` from the singleton registry so a later
+        ``Driver(serial)`` creates a new connection.
         """
         if hasattr(self, "_client") and self._client is not None:
             self._client.release()
+        self._unregister_singleton_if_self()
 
     def _init_hmclient(self):
         self._client.start()
