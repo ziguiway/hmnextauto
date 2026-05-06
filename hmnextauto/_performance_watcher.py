@@ -10,9 +10,9 @@
     # ... 测试执行 ...
     pw.stop()
 
-    # 高级用法 - 选择性监控
+    # 高级用法 - 选择性监控（推荐，更快）
     pw.configure(
-        metrics=["fps", "memory", "cpu"],
+        metrics=["fps", "memory"],  # 只采集需要的指标
         package="com.example.app",
         output_file="perf.jsonl",
         interval=0.5
@@ -24,6 +24,11 @@
     with d.performance_watcher.start("perf.jsonl"):
         d(text="按钮").click()
         # ... 自动停止并保存
+
+注意:
+    性能采集依赖 hidumper 命令，每个命令执行需要 1-5 秒。
+    建议使用 configure() 选择性采集指标，减少采集时间。
+    可用指标: fps, cpu, cpu_freq, memory, hitches
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ import json
 import statistics
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -40,6 +46,22 @@ from . import logger
 
 if TYPE_CHECKING:
     from .driver import Driver
+
+
+# 每个指标的超时时间（秒）
+# 注意:
+# - memory 指定 PID 时约 1-2 秒，不指定 PID 时需要 40+ 秒
+# - 建议在 configure() 时设置 package 参数以获得快速采集
+# - thermal 约 0.5 秒，memory_percent 约 0.2 秒
+METRIC_TIMEOUTS = {
+    "fps": 3.0,
+    "cpu": 5.0,
+    "cpu_freq": 5.0,
+    "memory": 5.0,  # 指定 PID 时约 1-2 秒
+    "hitches": 3.0,
+    "thermal": 2.0,
+    "memory_percent": 1.0,
+}
 
 
 @dataclass
@@ -54,6 +76,8 @@ class PerformanceData:
     memory_native: Optional[int] = None
     memory_ark: Optional[int] = None
     hitches: Optional[Dict[str, int]] = None
+    thermal: Optional[Dict[str, float]] = None  # 温度信息（摄氏度）
+    memory_percent: Optional[float] = None  # 系统内存使用率（0-100）
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典，过滤 None 值"""
@@ -78,8 +102,18 @@ class PerformanceWatcher:
     METRICS_CPU_FREQ = "cpu_freq"
     METRICS_MEMORY = "memory"
     METRICS_HITCHES = "hitches"
+    METRICS_THERMAL = "thermal"
+    METRICS_MEMORY_PERCENT = "memory_percent"
 
-    ALL_METRICS = [METRICS_FPS, METRICS_CPU, METRICS_CPU_FREQ, METRICS_MEMORY, METRICS_HITCHES]
+    ALL_METRICS = [
+        METRICS_FPS,
+        METRICS_CPU,
+        METRICS_CPU_FREQ,
+        METRICS_MEMORY,
+        METRICS_HITCHES,
+        METRICS_THERMAL,
+        METRICS_MEMORY_PERCENT,
+    ]
 
     def __init__(self, driver: "Driver") -> None:
         self._d = driver
@@ -191,51 +225,127 @@ class PerformanceWatcher:
         logger.info("PerformanceWatcher 已停止")
 
     def _collect(self) -> PerformanceData:
-        """收集一次性能数据"""
+        """收集一次性能数据（并行采集，带超时）"""
         now = datetime.now().isoformat()
         data = PerformanceData(timestamp=now)
 
-        # FPS
-        if self.METRICS_FPS in self._metrics:
-            try:
-                data.fps = self._d.fps()
-            except Exception as e:
-                logger.debug(f"采集 FPS 失败: {e}")
+        # 使用线程池并行采集
+        with ThreadPoolExecutor(max_workers=len(self._metrics)) as executor:
+            futures = {}
 
-        # CPU 使用率
-        if self.METRICS_CPU in self._metrics:
-            try:
-                cpu_info = self._d.cpu_usage()
-                data.cpu_percent = cpu_info.get("total")
-            except Exception as e:
-                logger.debug(f"采集 CPU 失败: {e}")
+            # FPS
+            if self.METRICS_FPS in self._metrics:
+                futures["fps"] = executor.submit(self._collect_fps)
 
-        # CPU 频率
-        if self.METRICS_CPU_FREQ in self._metrics:
-            try:
-                data.cpu_freqs = self._d.cpu_freq()
-            except Exception as e:
-                logger.debug(f"采集 CPU 频率失败: {e}")
+            # CPU 使用率
+            if self.METRICS_CPU in self._metrics:
+                futures["cpu"] = executor.submit(self._collect_cpu)
 
-        # 内存
-        if self.METRICS_MEMORY in self._metrics:
-            try:
-                mem_info = self._d.memory_info(self._package)
-                if mem_info:
-                    data.memory_pss = mem_info.get("total_pss")
-                    data.memory_native = mem_info.get("native_heap")
-                    data.memory_ark = mem_info.get("ark_ts_heap")
-            except Exception as e:
-                logger.debug(f"采集内存失败: {e}")
+            # CPU 频率
+            if self.METRICS_CPU_FREQ in self._metrics:
+                futures["cpu_freq"] = executor.submit(self._collect_cpu_freq)
 
-        # 帧卡顿
-        if self.METRICS_HITCHES in self._metrics:
-            try:
-                data.hitches = self._d.frame_hitchs()
-            except Exception as e:
-                logger.debug(f"采集 Hitch 失败: {e}")
+            # 内存
+            if self.METRICS_MEMORY in self._metrics:
+                futures["memory"] = executor.submit(self._collect_memory)
+
+            # 帧卡顿
+            if self.METRICS_HITCHES in self._metrics:
+                futures["hitches"] = executor.submit(self._collect_hitches)
+
+            # CPU 温度
+            if self.METRICS_THERMAL in self._metrics:
+                futures["thermal"] = executor.submit(self._collect_thermal)
+
+            # 系统内存使用率
+            if self.METRICS_MEMORY_PERCENT in self._metrics:
+                futures["memory_percent"] = executor.submit(self._collect_memory_percent)
+
+            # 获取结果（带超时）
+            for metric, future in futures.items():
+                timeout = METRIC_TIMEOUTS.get(metric, 5.0)
+                try:
+                    result = future.result(timeout=timeout)
+                    if metric == "fps":
+                        data.fps = result
+                    elif metric == "cpu":
+                        data.cpu_percent = result
+                    elif metric == "cpu_freq":
+                        data.cpu_freqs = result
+                    elif metric == "memory":
+                        if result:
+                            data.memory_pss = result.get("total_pss")
+                            data.memory_native = result.get("native_heap")
+                            data.memory_ark = result.get("ark_ts_heap")
+                    elif metric == "hitches":
+                        data.hitches = result
+                    elif metric == "thermal":
+                        data.thermal = result
+                    elif metric == "memory_percent":
+                        data.memory_percent = result
+                except FuturesTimeoutError:
+                    logger.debug(f"采集 {metric} 超时 ({timeout}s)")
+                except Exception as e:
+                    logger.debug(f"采集 {metric} 失败: {e}")
 
         return data
+
+    def _collect_fps(self) -> Optional[float]:
+        """采集 FPS"""
+        try:
+            return self._d.fps()
+        except Exception as e:
+            logger.debug(f"采集 FPS 失败: {e}")
+            return None
+
+    def _collect_cpu(self) -> Optional[float]:
+        """采集 CPU 使用率"""
+        try:
+            cpu_info = self._d.cpu_usage()
+            return cpu_info.get("total")
+        except Exception as e:
+            logger.debug(f"采集 CPU 失败: {e}")
+            return None
+
+    def _collect_cpu_freq(self) -> Optional[List[Dict[str, int]]]:
+        """采集 CPU 频率"""
+        try:
+            return self._d.cpu_freq()
+        except Exception as e:
+            logger.debug(f"采集 CPU 频率失败: {e}")
+            return None
+
+    def _collect_memory(self) -> Optional[Dict]:
+        """采集内存"""
+        try:
+            return self._d.memory_info(self._package)
+        except Exception as e:
+            logger.debug(f"采集内存失败: {e}")
+            return None
+
+    def _collect_hitches(self) -> Optional[Dict]:
+        """采集帧卡顿"""
+        try:
+            return self._d.frame_hitchs()
+        except Exception as e:
+            logger.debug(f"采集 Hitch 失败: {e}")
+            return None
+
+    def _collect_thermal(self) -> Optional[Dict[str, float]]:
+        """采集 CPU 温度"""
+        try:
+            return self._d.thermal_info()
+        except Exception as e:
+            logger.debug(f"采集温度失败: {e}")
+            return None
+
+    def _collect_memory_percent(self) -> Optional[float]:
+        """采集系统内存使用率"""
+        try:
+            return self._d.memory_percent()
+        except Exception as e:
+            logger.debug(f"采集内存使用率失败: {e}")
+            return None
 
     def _loop(self) -> None:
         """后台线程主循环"""
@@ -291,7 +401,14 @@ class PerformanceWatcher:
         summary: Dict[str, Any] = {"count": len(records), "metrics": {}}
 
         # 数值型字段统计
-        numeric_fields = ["fps", "cpu_percent", "memory_pss", "memory_native", "memory_ark"]
+        numeric_fields = [
+            "fps",
+            "cpu_percent",
+            "memory_pss",
+            "memory_native",
+            "memory_ark",
+            "memory_percent",
+        ]
 
         for field_name in numeric_fields:
             values = [r[field_name] for r in records if field_name in r and r[field_name] is not None]
@@ -318,6 +435,34 @@ class PerformanceWatcher:
             }
 
         return summary
+
+    def analyze(self) -> "PerformanceAnalyzer":
+        """
+        返回性能分析器实例，用于深度分析。
+
+        Returns:
+            PerformanceAnalyzer 实例
+
+        Raises:
+            ValueError: 未设置输出文件或文件不存在
+
+        Example:
+            >>> with d.performance_watcher.start("perf.jsonl") as pw:
+            ...     # 执行测试
+            ...     d(text="按钮").click()
+            >>> analyzer = pw.analyze()
+            >>> print(analyzer.score().grade)
+            'A'
+            >>> analyzer.generate_report("report.html")
+        """
+        if self.running:
+            logger.warning("建议先调用 stop() 再分析")
+
+        if not self._output_file:
+            raise ValueError("未设置输出文件")
+
+        from ._performance_analyzer import PerformanceAnalyzer
+        return PerformanceAnalyzer.from_file(self._output_file)
 
     def __enter__(self) -> "PerformanceWatcher":
         return self

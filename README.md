@@ -138,29 +138,57 @@ d.notification.set_brightness(128)
 d.notification.close()
 ```
 
-### 3. 性能监控 🆕
+### 3. 性能监控与分析 🆕
 
-后台自动采集设备性能数据：
+后台自动采集设备性能数据，支持深度分析和报告生成：
 
 ```python
-from hmnextauto import PerformanceWatcher
+# 基础用法 - 后台采集
+with d.performance_watcher.start("perf.jsonl", interval=0.5):
+    d(text="按钮").click()
+    # ... 执行测试 ...
 
-# 创建性能监控器
-perf = PerformanceWatcher(d)
+# 高级用法 - 选择性采集（推荐，更快）
+d.performance_watcher.configure(
+    metrics=["fps", "cpu", "memory", "hitches"],
+    package="com.example.app",  # 指定包名加速内存采集
+    interval=0.5
+).start("perf.jsonl")
 
-# 开始后台监控（每隔 1 秒采集一次）
-perf.start(interval=1.0)
+# 深度分析
+analyzer = d.performance_watcher.analyze()
 
-# 执行测试操作...
-d(text="按钮").click()
+# 统计摘要
+stats = analyzer.stats()
+print(f"FPS 平均: {stats.fps.avg}, P95: {stats.fps.p95}")
+print(f"内存峰值: {stats.memory_peak_mb:.1f} MB")
 
-# 停止并获取报告
-perf.stop()
-report = perf.get_report()
-print(f"平均 FPS: {report['fps']['avg']}")
-print(f"平均内存: {report['memory']['avg']} MB")
-print(f"CPU 使用率峰值: {report['cpu']['max']}%")
+# 异常检测
+anomalies = analyzer.detect_anomalies()
+for a in anomalies:
+    print(f"[{a.severity.value}] {a.message}")
+
+# 性能评分（S/A/B/C/D/F 等级）
+score = analyzer.score()
+print(f"性能等级: {score.grade} ({score.total}/100)")
+
+# 生成 HTML 报告（带图表）
+analyzer.generate_report("report.html", include_charts=True)
 ```
+
+**性能指标采集速度**：
+
+| 指标 | 命令 | 耗时 | 建议 |
+|------|------|------|------|
+| FPS | `hidumper -s RenderService -a fps` | ~0.3s | ✅ 推荐 |
+| CPU | `hidumper --cpuusage` | ~0.3s | ✅ 推荐 |
+| 内存(指定PID) | `hidumper --mem <PID>` | ~1.5s | ✅ 指定 package |
+| 内存(全系统) | `hidumper --mem` | ~40s | ❌ 不推荐 |
+| 卡顿 | `hidumper -s RenderService -a hitchs` | ~0.2s | ✅ 推荐 |
+| CPU温度 | `hidumper -s ThermalService -a '-t'` | ~0.5s | ✅ 推荐 |
+| 内存使用率 | `cat /proc/meminfo` | ~0.2s | ✅ 推荐 |
+
+> 💡 **性能提示**: 设置 `package` 参数可将内存采集从 40 秒降至 1-2 秒！
 
 ### 4. 智能等待条件 🆕
 
@@ -391,6 +419,8 @@ d.ocr.wait_text("加载完成", timeout=30)
 
 | 版本     | 日期         | 主要更新                               |
 | ------ | ---------- | ---------------------------------- |
+| v1.6.1 | 2026-05-06 | 🚀 性能监控优化：并行采集、内存采集提速 20 倍（指定 PID） |
+| v1.6.0 | 2026-05-06 | 🆕 新增性能数据分析工具（异常检测、评分、HTML 报告）     |
 | v1.5.0 | 2026-05-06 | 🆕 新增 OCR 文字识别功能（可选依赖）             |
 | v1.4.0 | 2026-05-03 | 🆕 新增全局隐式等待 `implicitly_wait`，Settings 配置管理 |
 | v1.3.0 | 2026-04-30 | 🆕 新增通知栏操作、XPath 多元素操作、性能监控、智能等待条件 |

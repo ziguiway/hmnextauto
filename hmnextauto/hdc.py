@@ -487,6 +487,10 @@ class HdcWrapper:
 
         Returns:
             Dict: Memory information including total_pss, native_heap, ark_ts_heap, graph, etc.
+
+        Note:
+            - When package_name is provided, uses `hidumper --mem <PID>` (~1-2 seconds)
+            - When package_name is None, uses `/proc/meminfo` (~0.2 seconds, faster but less detailed)
         """
         if package_name:
             pid = self._get_pid(package_name)
@@ -494,7 +498,8 @@ class HdcWrapper:
                 return {}
             data: CommandResult = self.shell(f"hidumper --mem {pid}")
         else:
-            data: CommandResult = self.shell("hidumper --mem")
+            # Use fast /proc/meminfo for system-wide memory (0.2s vs 40s for hidumper --mem)
+            data: CommandResult = self.shell("cat /proc/meminfo")
 
         output = data.output
         result = {}
@@ -526,61 +531,24 @@ class HdcWrapper:
                     except ValueError:
                         pass
         else:
-            # Parse system-wide memory format (process list)
-            # Format: PID    Total Pss(xxx in SwapPss) kB    Total Vss kB    ...    Name
-            # Calculate totals across all processes
-            total_pss = 0
-            total_vss = 0
-            total_rss = 0
-            total_uss = 0
-            process_count = 0
-
+            # Parse /proc/meminfo format
+            # Format: MemTotal:       12345678 kB
             for line in output.split('\n'):
                 line = line.strip()
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip().lower()
+                    # Extract number (remove 'kB' suffix)
+                    value_match = re.search(r'(\d+)', value)
+                    if value_match:
+                        try:
+                            result[key] = int(value_match.group(1))
+                        except ValueError:
+                            pass
 
-                # Skip header lines
-                if not line or line.startswith('-') or line.startswith('PID') or '[memory]' in line:
-                    continue
-
-                # Parse process line: PID    Total Pss(...) kB    Total Vss kB    Total Rss kB    Total Uss kB    ...
-                # Example: 1            4196(284 in SwapPss) kB   2162036 kB      7316 kB      3604 kB
-                match = re.match(r'^(\d+)\s+(\d+)\(', line)
-                if match:
-                    try:
-                        total_pss += int(match.group(2))
-                        process_count += 1
-                    except ValueError:
-                        continue
-
-                    # Try to get more fields
-                    parts = line.split()
-                    # Find kB positions and extract values
-                    try:
-                        # Format: PID Pss kB Vss kB Rss kB Uss kB ...
-                        # Find indices of 'kB' tokens
-                        kb_indices = [i for i, p in enumerate(parts) if p == 'kB']
-                        if len(kb_indices) >= 4:
-                            # Pss is already captured
-                            # Vss is before second kB
-                            vss_idx = kb_indices[1] - 1
-                            rss_idx = kb_indices[2] - 1
-                            uss_idx = kb_indices[3] - 1
-                            if vss_idx > 0:
-                                total_vss += int(parts[vss_idx])
-                            if rss_idx > 0:
-                                total_rss += int(parts[rss_idx])
-                            if uss_idx > 0:
-                                total_uss += int(parts[uss_idx])
-                    except (ValueError, IndexError):
-                        pass
-
-            result = {
-                'total_pss': total_pss,
-                'total_vss': total_vss,
-                'total_rss': total_rss,
-                'total_uss': total_uss,
-                'process_count': process_count
-            }
+            # Map common fields to expected format
+            result['total_pss'] = result.get('memtotal', 0) - result.get('memfree', 0)
+            result['total'] = result.get('memtotal', 0)
 
         return result
 
@@ -789,3 +757,55 @@ class HdcWrapper:
                     result['over_16ms'] = int(match.group(1))
 
         return result
+
+    def thermal_info(self) -> Dict[str, float]:
+        """
+        Get device thermal information (temperatures in Celsius).
+
+        Returns:
+            Dict[str, float]: Temperature readings from various sensors.
+                Common sensors include:
+                - battery: Battery temperature
+                - soc_thermal: CPU/SoC temperature
+                - shell_front/shell_back: Device shell temperatures
+                - charger: Charger temperature
+
+        Example:
+            >>> thermal = hdc.thermal_info()
+            >>> print(f"CPU: {thermal['soc_thermal']}°C")
+            >>> print(f"Battery: {thermal['battery']}°C")
+        """
+        data: CommandResult = self.shell("hidumper -s ThermalService -a '-t'")
+        output = data.output
+
+        result = {}
+        # Parse: Type: Battery\nTemperature: 32000
+        # Temperature is in millidegrees Celsius
+        for match in re.finditer(r'Type:\s*(\S+)\s*Temperature:\s*(\d+)', output):
+            sensor = match.group(1).lower()
+            temp_mc = int(match.group(2))  # millidegrees
+            result[sensor] = temp_mc / 1000.0  # Convert to Celsius
+
+        return result
+
+    def memory_percent(self) -> float:
+        """
+        Get system memory usage percentage.
+
+        Returns:
+            float: Memory usage percentage (0-100)
+
+        Example:
+            >>> percent = hdc.memory_percent()
+            >>> print(f"Memory usage: {percent}%")
+        """
+        # Reuse memory_info which reads /proc/meminfo
+        mem_info = self.memory_info()
+        total = mem_info.get('memtotal', 0)
+        available = mem_info.get('memavailable', 0)
+
+        if total <= 0:
+            return 0.0
+
+        used = total - available
+        return round((used / total) * 100, 1)

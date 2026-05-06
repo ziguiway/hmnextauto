@@ -922,6 +922,37 @@ class Driver:
         """
         return self.hdc.frame_hitchs()
 
+    def thermal_info(self) -> Dict[str, float]:
+        """
+        Get device thermal information (temperatures in Celsius).
+
+        Returns:
+            Dict[str, float]: Temperature readings from various sensors.
+                Common sensors include:
+                - battery: Battery temperature
+                - soc_thermal: CPU/SoC temperature
+                - shell_front/shell_back: Device shell temperatures
+
+        Example:
+            >>> thermal = d.thermal_info()
+            >>> print(f"CPU: {thermal.get('soc_thermal', 0):.1f}°C")
+            >>> print(f"Battery: {thermal.get('battery', 0):.1f}°C")
+        """
+        return self.hdc.thermal_info()
+
+    def memory_percent(self) -> float:
+        """
+        Get system memory usage percentage.
+
+        Returns:
+            float: Memory usage percentage (0-100)
+
+        Example:
+            >>> percent = d.memory_percent()
+            >>> print(f"Memory usage: {percent}%")
+        """
+        return self.hdc.memory_percent()
+
     def app_start_time(self, package_name: str) -> Optional[int]:
         """
         Get the start timestamp of an application (system uptime when started).
