@@ -574,6 +574,38 @@ class Driver:
         from ._notification import NotificationPanel
         return NotificationPanel(self)
 
+    @cached_property
+    def ocr(self):
+        """
+        OCR text recognition operations.
+
+        Requires optional dependency: pip install hmnextauto[ocr]
+
+        Usage::
+
+            # Read all text on screen
+            results = d.ocr.read()
+
+            # Read text in a region
+            results = d.ocr.read(region=(100, 100, 500, 200))
+
+            # Find text position
+            pos = d.ocr.find_text("登录")
+            if pos:
+                print(f"Found at: {pos}")
+
+            # Find and click text
+            d.ocr.click_text("确定", timeout=10)
+
+            # Wait for text to appear
+            d.ocr.wait_text("加载完成", timeout=30)
+
+            # Wait for text to disappear
+            d.ocr.wait_text_gone("加载中")
+        """
+        from ._ocr import OCR
+        return OCR(self)
+
     @delay
     def go_back(self):
         self.hdc.send_key(KeyCode.BACK)

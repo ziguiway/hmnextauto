@@ -12,6 +12,9 @@ python = "^3.8"
 lxml = ">=4.9.0"
 opencv-python-headless = "^4.8"
 
+[tool.poetry.extras]
+ocr = ["easyocr"]
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
 
