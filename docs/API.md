@@ -16,6 +16,7 @@
 - [控件操作](#控件操作)
 - [XPath 定位](#xpath-定位)
 - [视觉定位](#视觉定位)
+- [OCR 文字识别](#ocr-文字识别)
 - [后台 Watcher](#后台-watcher)
 - [Toast 监控](#toast-监控)
 - [屏幕录制](#屏幕录制)
@@ -639,6 +640,130 @@ ok = d.click_color(
     tolerance=10,                # 容差
     region=(100, 400, 600, 1200) # 搜索区域 (x1, y1, x2, y2)
 )
+```
+
+---
+
+## OCR 文字识别
+
+OCR 功能用于识别屏幕上的文字，支持全屏识别、区域识别、查找文字位置等。
+
+> **安装依赖**: OCR 功能需要额外安装 easyocr：
+> ```bash
+> pip install hmnextauto[ocr]
+> # 或
+> pip install easyocr
+> ```
+
+| API | 说明 | 返回类型 |
+|-----|------|----------|
+| `ocr.read()` | 识别屏幕所有文字 | `List[OCRResult]` |
+| `ocr.read(region)` | 识别指定区域文字 | `List[OCRResult]` |
+| `ocr.read(detail=False)` | 只返回文字列表 | `List[str]` |
+| `ocr.find_text(text)` | 查找文字位置 | `Tuple[int, int]` 或 `None` |
+| `ocr.find_all_text(text)` | 查找所有匹配位置 | `List[Tuple[int, int]]` |
+| `ocr.click_text(text)` | 查找并点击文字 | `bool` |
+| `ocr.wait_text(text, timeout)` | 等待文字出现 | `bool` |
+| `ocr.wait_text_gone(text, timeout)` | 等待文字消失 | `bool` |
+| `ocr.read_text_in_region(region)` | 读取区域内文字拼接 | `str` |
+
+### OCRResult 数据结构
+
+```python
+@dataclass
+class OCRResult:
+    text: str                    # 识别的文字
+    bbox: Tuple[Tuple[int, int], ...]  # 四个角坐标
+    confidence: float            # 置信度 (0.0-1.0)
+    
+    @property
+    def center(self) -> Tuple[int, int]:  # 中心坐标
+        ...
+    
+    @property
+    def bounds(self) -> Tuple[int, int, int, int]:  # (x1, y1, x2, y2)
+        ...
+```
+
+### 示例代码
+
+```python
+# 识别屏幕所有文字
+results = d.ocr.read()
+for r in results:
+    print(f"文字: {r.text}, 置信度: {r.confidence:.2f}, 位置: {r.center}")
+
+# 只获取文字列表（不返回坐标等信息）
+texts = d.ocr.read(detail=False)
+print(texts)  # ['文字1', '文字2', ...]
+
+# 识别指定区域
+results = d.ocr.read(region=(100, 100, 500, 300))
+
+# 查找文字位置
+pos = d.ocr.find_text("登录")
+if pos:
+    print(f"找到文字，位置: {pos}")
+    d.click(pos[0], pos[1])
+
+# 查找所有匹配位置
+positions = d.ocr.find_all_text("确定")
+for pos in positions:
+    print(f"位置: {pos}")
+
+# 查找并点击文字（自动等待）
+if d.ocr.click_text("确定", timeout=10):
+    print("点击成功")
+else:
+    print("未找到文字")
+
+# 等待文字出现
+if d.ocr.wait_text("加载完成", timeout=30):
+    print("文字已出现")
+
+# 等待文字消失
+if d.ocr.wait_text_gone("加载中...", timeout=30):
+    print("加载完成")
+
+# 读取区域内所有文字（拼接成字符串）
+text = d.ocr.read_text_in_region((100, 100, 500, 300))
+print(f"区域内文字: {text}")
+
+# 精确匹配（默认部分匹配）
+pos = d.ocr.find_text("登录", exact=True)  # 必须完全匹配
+
+# 设置置信度阈值
+results = d.ocr.read(min_confidence=0.8)  # 只返回置信度 >= 0.8 的结果
+
+# 指定语言
+results = d.ocr.read(languages=["ch_sim", "en"])  # 简体中文 + 英文（默认）
+results = d.ocr.read(languages=["en"])  # 仅英文
+```
+
+### 完整 OCR 示例
+
+```python
+from hmnextauto.driver import Driver
+
+d = Driver()
+
+# 启动应用
+d.start_app("com.example.app")
+
+# 等待并点击登录按钮
+if d.ocr.click_text("登录", timeout=10):
+    print("点击登录成功")
+
+# 识别验证码区域
+captcha_text = d.ocr.read_text_in_region((100, 500, 400, 600))
+print(f"验证码: {captcha_text}")
+
+# 输入验证码
+d(text="验证码输入框").input_text(captcha_text)
+
+# 等待登录成功
+if d.ocr.wait_text("欢迎", timeout=10):
+    print("登录成功")
 ```
 
 ---
