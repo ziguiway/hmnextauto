@@ -289,6 +289,18 @@ class _XMLElement:
         self.click()
         self._d.input_text(text)
 
+    @delay
+    def clear_text(self):
+        """
+        Focus this xpath node, then clear its text via Driver.
+
+        Mirrors :meth:`input_text`. Uses :meth:`Driver.clear_text` (Hypium
+        ``Driver.clearText`` / ``BY.xpath`` full-clear). ``Component.clearText``
+        may delete only one character for values such as ``10.14``.
+        """
+        self.click()
+        self._d.clear_text(self._xpath)
+
     @property
     @delay
     def info(self) -> dict:

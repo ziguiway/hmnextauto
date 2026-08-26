@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 XPath 功能增强测试
-测试: count, all(), first(), last()
+测试: count, all(), first(), last(), clear_text()
 """
 
 import pytest
 import time
+from unittest.mock import MagicMock, patch
+
 from hmnextauto.driver import Driver
+from hmnextauto._xpath import _XMLElement
+from hmnextauto.proto import Bounds, HypiumResponse
 
 
 @pytest.fixture
@@ -15,6 +19,66 @@ def d():
     d = Driver()
     yield d
     d.close()
+
+
+@patch("hmnextauto.utils.time.sleep")
+def test_xpath_clear_text_exists_and_forwards_to_driver(mock_sleep):
+    """No-device: _XMLElement.clear_text focuses the node then forwards to Driver."""
+    mock_d = MagicMock()
+    xpath = '(//*[@type="TextInput"])[2]'
+    el = _XMLElement(Bounds(10, 20, 110, 80), mock_d, xpath)
+
+    assert hasattr(el, "clear_text")
+    assert callable(el.clear_text)
+
+    el.clear_text()
+
+    mock_d.click.assert_called_once()
+    mock_d.clear_text.assert_called_once_with(xpath)
+
+
+@patch("hmnextauto.utils.time.sleep")
+def test_xpath_clear_text_mirrors_input_text_focus_then_driver(mock_sleep):
+    """No-device: clear_text uses the same click-then-Driver path as input_text."""
+    mock_d = MagicMock()
+    xpath = '//*[@type="TextInput"]'
+    el = _XMLElement(Bounds(0, 0, 50, 50), mock_d, xpath)
+
+    el.input_text("10.14")
+    mock_d.click.assert_called()
+    mock_d.input_text.assert_called_once_with("10.14")
+
+    mock_d.reset_mock()
+    el.clear_text()
+    mock_d.click.assert_called_once()
+    mock_d.clear_text.assert_called_once_with(xpath)
+
+
+@patch("hmnextauto.driver.HmClient")
+@patch("hmnextauto.driver.list_devices", return_value=["AAA"])
+@patch("hmnextauto.utils.time.sleep")
+def test_driver_clear_text_xpath_invokes_hypium_by_xpath(mock_sleep, mock_list, mock_hm_cls):
+    """No-device: Driver.clear_text(xpath) is Hypium Driver.clearText(BY.xpath)."""
+    Driver._instance.clear()
+    client = MagicMock()
+    client.hdc = MagicMock()
+    client.invoke.side_effect = [
+        HypiumResponse("On#1"),
+        HypiumResponse(None),
+    ]
+    mock_hm_cls.return_value = client
+
+    try:
+        driver = Driver("AAA")
+        xpath = '(//*[@type="TextInput"])[last()]'
+        driver.clear_text(xpath)
+
+        client.invoke.assert_any_call("On.xpath", this="On#seed", args=[xpath])
+        client.invoke.assert_any_call(
+            "Driver.clearText", this="Driver#0", args=["On#1"]
+        )
+    finally:
+        Driver._instance.clear()
 
 
 def test_xpath_count(d):

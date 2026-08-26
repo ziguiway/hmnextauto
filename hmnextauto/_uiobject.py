@@ -471,7 +471,17 @@ class UiObject:
 
     @delay
     def clear_text(self):
-        return self.__operate("Component.clearText")
+        """
+        Clear this selector's text via Hypium ``Driver.clearText`` (full-clear).
+
+        ``Component.clearText`` may delete only one character for values such
+        as ``10.14``. ``Driver.clearText(BY...)`` clears the whole field.
+        """
+        by: ByData = self._by_data()
+        resp: HypiumResponse = self._client.invoke(
+            "Driver.clearText", this="Driver#0", args=[by.value]
+        )
+        return resp.result
 
     @delay
     def pinch_in(self, scale: float = 0.5):

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import pytest
+from unittest.mock import MagicMock, patch
 
 from hmnextauto.driver import Driver
-from hmnextauto.proto import ElementInfo, ComponentData
+from hmnextauto._uiobject import UiObject
+from hmnextauto.proto import ElementInfo, ComponentData, HypiumResponse
 
 
 @pytest.fixture
@@ -108,6 +110,25 @@ def test_drag_to(d):
 def test_input(d):
     d(text="showToast").input_text("abc")
     d(text="showToast").clear_text()
+
+
+@patch("hmnextauto.utils.time.sleep")
+def test_uiobject_clear_text_uses_driver_cleartext(mock_sleep):
+    """No-device: selector clear_text uses Driver.clearText (full-clear), not Component.clearText."""
+    client = MagicMock()
+    client.invoke.side_effect = [
+        HypiumResponse("On#1"),
+        HypiumResponse(None),
+    ]
+    obj = UiObject(client, text="10.14")
+    obj.clear_text()
+
+    apis = [c.args[0] for c in client.invoke.call_args_list]
+    assert "Driver.clearText" in apis
+    assert "Component.clearText" not in apis
+    client.invoke.assert_any_call(
+        "Driver.clearText", this="Driver#0", args=["On#1"]
+    )
 
 
 def test_pinch(d):

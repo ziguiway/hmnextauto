@@ -1464,6 +1464,25 @@ class Driver:
         """
         return self._invoke("Driver.inputText", args=[{"x": 1, "y": 1}, text])
 
+    @delay
+    def clear_text(self, xpath: Optional[str] = None):
+        """
+        Clear text using Hypium ``Driver.clearText`` (full-clear).
+
+        If *xpath* is given, this is equivalent to
+        ``driver.clear_text(BY.xpath(xpath))``. Otherwise clears the currently
+        focused input field (the field must have focus, same as :meth:`input_text`).
+
+        Args:
+            xpath: Optional xpath string used to build ``On.xpath`` / ``BY.xpath``.
+        """
+        args: List = []
+        if xpath:
+            resp = self._client.invoke("On.xpath", this="On#seed", args=[xpath])
+            if resp.result:
+                args = [resp.result]
+        return self._invoke("Driver.clearText", args=args)
+
     def dump_hierarchy(self) -> Dict:
         """
         Dump the UI hierarchy of the device screen.
